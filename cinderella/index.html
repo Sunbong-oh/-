@@ -190,7 +190,12 @@
   let speaking = false, sayId = 0, speakGuard = null;
   try {
     if (window.claude && typeof window.claude.use === "function") {
-      window.claude.use("tts").then((t) => { if (t) tts = t; }).catch(() => {});
+      window.claude.use("tts").then((t) => {
+        if (!t) return;
+        tts = t;
+        const vb = document.getElementById("voiceBox");   // Claude 음성이 있을 때만 목소리 고르기를 보여 줘요
+        if (vb) vb.classList.remove("hidden");
+      }).catch(() => {});
     }
   } catch (e) {}
 
@@ -489,7 +494,7 @@
       '<p class="sub">' + esc(STORY.ko) + ' · 영어 질문에 <b>영어로 말해서</b> 대답해요!</p>' +
       '<div class="card"><img class="pic" src="' + STORY.cover + '" alt="' + esc(STORY.title) + '"></div>' +
       '<button class="big-btn" id="go">▶ 시작하기</button>' +
-      '<div class="card" id="voiceBox" style="margin-top:14px">' +
+      '<div class="card' + (tts ? '' : ' hidden') + '" id="voiceBox" style="margin-top:14px">' +
         '<div class="q-ko" style="font-size:15px">🗣️ 선생님 목소리 고르기 (미국 영어) — 눌러서 들어 보세요</div>' +
         '<div class="opts" style="grid-template-columns:1fr 1fr">' + VOICES.map((v) =>
           '<button class="opt vbtn" data-v="' + v.id + '" style="cursor:pointer;color:var(--ink)"><span class="w">' + v.label + '</span></button>'
@@ -501,11 +506,6 @@
     document.querySelectorAll(".vbtn").forEach((b) => {
       b.onclick = () => { unlockAudio(); setVoice(b.dataset.v); markVoice(); sayEn("Hello! I am your English teacher. Let's play!"); };
     });
-    // Claude 음성이 없는 기기에서는 목소리 고르기 대신 안내
-    later(() => {
-      if (!tts) document.getElementById("voiceBox").innerHTML =
-        '<div class="q-ko" style="font-size:15px">🗣️ 이 기기의 미국 영어 여자 목소리로 읽어 줘요.</div>';
-    }, 1500);
     document.getElementById("go").onclick = () => { unlockAudio(); showGreet(0); };
   }
 
