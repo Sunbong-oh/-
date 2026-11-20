@@ -61,7 +61,11 @@ button{font:inherit;color:inherit}
 .room header span{color:var(--mute);font-size:12px}
 .desks{display:grid;grid-template-columns:repeat(auto-fill,minmax(210px,1fr));gap:10px}
 .desk{background:var(--bg);border:1px solid var(--wall);border-radius:4px;padding:10px;display:grid;gap:6px;min-width:0;text-align:left;cursor:pointer}
-.desk[aria-expanded="true"]{border-color:var(--c)}
+a.desk,a.desk:hover{color:inherit;text-decoration:none}
+.desk:hover{border-color:var(--c)}
+a.name-link{color:inherit;text-decoration:underline;text-decoration-color:var(--wall);text-underline-offset:3px}
+a.name-link:hover{text-decoration-color:var(--fg)}
+.go{font-size:11px;color:var(--c)}
 .desk.dim{opacity:.55}
 .top{display:flex;gap:8px;align-items:center}
 .avatar{width:22px;height:26px;flex:none;background:var(--c);clip-path:polygon(25% 0,75% 0,75% 35%,100% 35%,100% 100%,0 100%,0 35%,25% 35%)}
@@ -73,7 +77,7 @@ button{font:inherit;color:inherit}
 .tag{border:1px solid var(--wall);padding:0 6px;border-radius:3px}
 .state{font-size:12px;color:var(--c);font-weight:500}
 .detail{font-size:12px;margin:0;overflow-wrap:anywhere}
-.desk:not([aria-expanded="true"]) .detail{display:none}
+.desk .detail{display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden;color:var(--mute)}
 .sched{display:grid;gap:8px}
 .row{display:grid;grid-template-columns:150px minmax(0,1fr) auto;gap:4px 14px;background:var(--floor);border:1px solid var(--wall);border-radius:4px;padding:10px 14px;font-size:13px;align-items:center}
 .row .when{font-family:var(--pix);color:var(--run);font-size:14px;overflow-wrap:anywhere}
@@ -178,7 +182,9 @@ var SNAP_SCHED=[
  {when:'06:35 서울 (화~토)',name:'출근길 브리핑 해설 작성',sub:'지난밤 미국 증시 해설 한 단락을 main에 반영.',next:'스냅샷: 11/21 06:35 다음'}
 ];
 
-var state={sessions:SNAP.map(function(a){return{room:a[0],name:a[1],st:a[2],loc:a[3],time:a[4],text:a[5],ts:0}}),
+var SURL='https://claude.ai/code/';
+var IDS={'AI 오피스 시각화':'session_01V47m9eCGaVaKi1hQvYSxHJ','해외주식 실적감시':'session_01V47m9g4XofFVrGDFckc6Pm','해외주식 실적 자동화':'session_017hicUnC3FbPU6d1GcEeAJ9','전일 강세종목 리포트 운영':'session_01V47m9e5tr5BFN7eAVhSPZV','장마감 브리핑 팟캐스트':'session_016AHNqmrhNn37xMMJfgpbLE','미국 증시 아침 브리핑':'session_01DHog7bmS4SsgrKaC7XK71Q','출근길 브리핑 해설 작성':'session_01MeWUEYYrb72R1mS3StQvfq','주식투자 사이트 개발':'session_019CsX3p4N8Xqcn2iaRVtwjv','실시간 수급체크 운영':'session_01V47m9hqRKVYP3YUaHzsUmJ','기업 리포트 요약':'session_01VUpZq9SpKtm9kaMLYAPqTr','글로벌 주식 시장 밸류에이션 비교':'session_01GJe3BcaZdUfUZeQxkyNEzR','실시간 수급체크 운영 (이전)':'session_01V47m9hUawHjUL4Ex1jT9s5','실적 자동 점검 전용 (이전)':'session_01V47m9f3XFCrxCfvXJ3MkYq','오전 데일리':'session_01VmhDXZsezeUX4XzQsivGzR','외국인 자금 유출 출처 분석':'session_017fagxG6QpGJWdCey4pUTwN','IonQ 수익성·경쟁력':'session_018ax9R2wi9DjPj3eCQoSkiw','제주 행사 알리미':'session_01V47m9fwAXuZRkvcA63XmHa','제주도 행사 정보 수집 사이트':'session_01V47m9f2ErNDaG39eJxmxJB','제주도 아기 동반 식당/숙소':'session_01V47m9f81siU7ioNAZYmegF','사이트 계정 이전':'session_01V47m9g1n75dUBV6fDJfnaf','라이프 플랜':'session_01371xsbESY1WPBFF7acsjEU','영어강좌 모집 신청':'session_01V47m9g8QDBx75jXzy33mFS','쿠팡 결제 정산 자동화':'session_019GNQCdAshBrPEyCwokvxb8','영어 요일 자석 디자인':'session_01V47m9fxHkYNiHznaGKjphT','한글 도안 완성':'session_01V47m9f2j8X8YuyWbb58vYV','게임 이미지 생성 커넥터':'session_01V47m9hhGS5Jy4QfzKfaLJw','안테나팟 자동 새로고침 루틴':'session_01V47m9hHNVgvfsTim9Qr1aK','복사해서 넣어줘':'session_01V47m9fa5HYKRbtWnS7NU8w','이름 없는 세션 (cshk)':'session_01V47m9fh1FYHT8ej9wsGdrL','Gbrain':'session_01V47m9fR7GrnowFMB8Y4Vwe'};
+var state={sessions:SNAP.map(function(a){return{room:a[0],name:a[1],st:a[2],loc:a[3],time:a[4],text:a[5],ts:0,id:IDS[a[1]]}}),
   sched:SNAP_SCHED,live:false,stamp:null};
 var filter=null;
 
@@ -249,7 +255,9 @@ function sortS(a,b){
   return (o[a.st]-o[b.st])||(b.ts-a.ts);
 }
 function liItem(s,showText){
-  var li=el('li');li.appendChild(el('strong',null,s.name));
+  var li=el('li');var st=el('strong');
+  if(s.id){var a=el('a','name-link',s.name);a.href=SURL+s.id;a.target='_blank';a.rel='noopener';st.appendChild(a)}else st.textContent=s.name;
+  li.appendChild(st);
   var r=el('div');
   if(showText)r.appendChild(el('span',null,s.text||'기록 없음'));
   var e=el('em',null,(s.loc==='p'?'내 PC':'클라우드')+' · '+s.time);
@@ -309,14 +317,14 @@ function rooms(){
     var g=el('div','desks');
     items.forEach(function(d,i){
       var s=ST[d.st];var key=d.name;
-      var b=el('button','desk'+(d.st==='run'?' live':'')+(d.st==='off'?' dim':''));
-      b.type='button';b.id='desk-'+r[0]+'-'+i;b.style.setProperty('--c',s.c);
-      b.setAttribute('aria-expanded',open[key]?'true':'false');
+      var b=el(d.id?'a':'div','desk'+(d.st==='run'?' live':'')+(d.st==='off'?' dim':''));
+      b.id='desk-'+r[0]+'-'+i;b.style.setProperty('--c',s.c);
+      if(d.id){b.href=SURL+d.id;b.target='_blank';b.rel='noopener'}
       var top=el('div','top');top.appendChild(el('span','avatar'));
       var tx=el('div');tx.appendChild(el('div','name',d.name));tx.appendChild(el('div','state',s.t));top.appendChild(tx);
       var meta=el('div','meta');meta.appendChild(el('span','tag',d.loc==='p'?'내 PC':'클라우드'));meta.appendChild(el('span',null,d.time));
       b.appendChild(top);b.appendChild(meta);b.appendChild(el('p','detail',d.text||'기록 없음'));
-      b.onclick=function(){open[key]=!open[key];b.setAttribute('aria-expanded',open[key]?'true':'false')};
+      if(d.id)b.appendChild(el('span','go','세션 열기 ↗'));
       g.appendChild(b);
     });
     room.appendChild(g);box.appendChild(room);
