@@ -1,0 +1,186 @@
+<title>AI 오피스</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;700&family=DotGothic16&display=swap">
+<style>
+/* Layout: 건물 평면도. 위에 요약·호출 목록, 아래에 4개 사무실(팀룸), 맨 아래 예약 루틴. 단일 다크 톤. */
+:root{
+  color-scheme:dark;
+  --bg:#14171c; --floor:#1b2027; --wall:#2c333d; --fg:#e6e9ee; --mute:#8b94a1;
+  --run:#4ade80; --wait:#fbbf24; --review:#60a5fa; --idle:#7dd3c0; --off:#4b5563;
+  --font:'Noto Sans KR',system-ui,sans-serif; --pix:'DotGothic16','Noto Sans KR',monospace;
+}
+body{background:var(--bg);color:var(--fg);font-family:var(--font);margin:0;
+  padding-block:20px 40px;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));line-height:1.5}
+.wrap{max-width:1100px;margin:0 auto;display:grid;gap:20px}
+h1{font-family:var(--pix);font-size:28px;margin:0;font-weight:400;letter-spacing:.02em}
+h2{font-family:var(--pix);font-size:18px;margin:0;font-weight:400}
+.sub{color:var(--mute);font-size:13px;margin:4px 0 0}
+.chips{display:flex;flex-wrap:wrap;gap:8px}
+.chip{border:1px solid var(--wall);background:var(--floor);color:var(--fg);border-radius:6px;padding:6px 12px;font:inherit;font-size:13px;cursor:pointer;display:flex;gap:8px;align-items:center}
+.chip[aria-pressed="true"]{border-color:var(--fg)}
+.chip:focus-visible,.desk:focus-visible{outline:2px solid var(--review);outline-offset:2px}
+.dot{width:10px;height:10px;border-radius:2px;background:var(--c,var(--off));flex:none}
+.chip b{font-variant-numeric:tabular-nums}
+.alert{border:1px solid var(--wait);background:var(--floor);padding:14px 16px;border-radius:6px}
+.alert ul{margin:8px 0 0;padding:0;list-style:none;display:grid;gap:8px}
+.alert li{font-size:13px;display:grid;grid-template-columns:minmax(0,200px) 1fr;gap:4px 12px}
+.alert li strong{font-weight:700}
+.alert li span{color:var(--mute)}
+@media(max-width:600px){.alert li{grid-template-columns:1fr}}
+.rooms{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,480px),1fr));gap:16px}
+.room{background:var(--floor);border:3px solid var(--wall);border-radius:4px;padding:14px;min-width:0}
+.room header{display:flex;justify-content:space-between;align-items:baseline;gap:8px;margin-bottom:12px;flex-wrap:wrap}
+.room header span{color:var(--mute);font-size:12px}
+.desks{display:grid;grid-template-columns:repeat(auto-fill,minmax(210px,1fr));gap:10px}
+.desk{background:var(--bg);border:1px solid var(--wall);border-radius:4px;padding:10px;display:grid;gap:6px;min-width:0;text-align:left;color:inherit;font:inherit;cursor:pointer}
+.desk[aria-expanded="true"]{border-color:var(--c)}
+.desk.dim{opacity:.55}
+.top{display:flex;gap:8px;align-items:center}
+.avatar{width:22px;height:26px;position:relative;flex:none;background:var(--c);clip-path:polygon(25% 0,75% 0,75% 35%,100% 35%,100% 100%,0 100%,0 35%,25% 35%)}
+.desk.live .avatar{animation:bob 1s steps(2) infinite}
+@keyframes bob{50%{transform:translateY(-3px)}}
+@media(prefers-reduced-motion:reduce){.desk.live .avatar{animation:none}}
+.name{font-size:13px;font-weight:700;overflow-wrap:anywhere}
+.meta{display:flex;flex-wrap:wrap;gap:4px 8px;font-size:11px;color:var(--mute)}
+.tag{border:1px solid var(--wall);padding:0 6px;border-radius:3px}
+.state{font-size:12px;color:var(--c);font-weight:500}
+.detail{font-size:12px;color:var(--fg);margin:0;overflow-wrap:anywhere}
+.desk:not([aria-expanded="true"]) .detail{display:none}
+.sched{display:grid;gap:8px}
+.row{display:grid;grid-template-columns:130px minmax(0,1fr) auto;gap:4px 14px;background:var(--floor);border:1px solid var(--wall);border-radius:4px;padding:10px 14px;font-size:13px;align-items:center}
+.row .when{font-family:var(--pix);color:var(--run);font-size:15px}
+.row small{color:var(--mute);display:block}
+.row .next{font-variant-numeric:tabular-nums;color:var(--mute);font-size:12px;text-align:right}
+@media(max-width:600px){.row{grid-template-columns:1fr}.row .next{text-align:left}}
+.note{font-size:12px;color:var(--mute);margin:0}
+</style>
+
+<div class="wrap">
+  <div>
+    <h1>AI 오피스</h1>
+    <p class="sub">내 Claude 세션 28개가 어느 사무실(주제)에서 무슨 상태인지 한눈에 봅니다. 기준 시각: 2026-11-20 13:25 KST 스냅샷</p>
+  </div>
+
+  <div class="chips" id="chips" role="group" aria-label="상태 필터"></div>
+
+  <section class="alert" aria-labelledby="ah">
+    <h2 id="ah">지금 내 답이 필요한 책상</h2>
+    <ul id="needs"></ul>
+  </section>
+
+  <div class="rooms" id="rooms"></div>
+
+  <section>
+    <h2 style="margin-bottom:10px">자동으로 도는 예약 루틴 (켜져 있는 것)</h2>
+    <div class="sched" id="sched"></div>
+    <p class="note" style="margin-top:10px">예약 목록은 첫 페이지(최근 30개)만 읽었습니다. 그 뒤에 더 있을 수 있고, 한 번 실행 후 꺼진 알림 예약은 뺐습니다.</p>
+  </section>
+
+  <p class="note">책상 모양: 클라우드는 Anthropic 서버에서, 내 PC는 내 컴퓨터에 연결된 세션(Remote Control)에서 돌아갑니다. 이 화면은 정지된 스냅샷이라 자동으로 갱신되지 않습니다. 새로고침이 필요하면 Claude에게 "오피스 갱신"이라고 말해 주세요.</p>
+</div>
+
+<script>
+var ST={
+  run:{t:'작업 중',c:'var(--run)'},
+  wait:{t:'내 답변 대기',c:'var(--wait)'},
+  review:{t:'검토 대기',c:'var(--review)'},
+  idle:{t:'완료·대기',c:'var(--idle)'},
+  off:{t:'보관됨',c:'var(--off)'}
+};
+// [방, 이름, 상태, 위치(c=클라우드, p=내 PC), 마지막 갱신(KST), 한 줄 요약]
+var D=[
+ ['stock','AI 오피스 시각화','run','c','11/20 13:23','이 세션입니다. 지금 이 화면을 만드는 중.'],
+ ['stock','해외주식 실적감시','idle','c','11/20 12:52','앤트로픽 상장 첫날 해설을 main에 push(ad61f0b). 예약 루틴 3개가 이 책상에서 돌고 있음.'],
+ ['stock','해외주식 실적 자동화','wait','c','11/04 01:25','11월 캘린더 파일을 kb-market-report에 올릴지, KB 장마감 알람용 CLOSE_REPO_TOKEN 시크릿을 등록할지 답이 필요.'],
+ ['stock','전일 강세종목 리포트 운영','wait','c','11/12 12:21','리포트 내용을 붙여 주거나, 해외주식 실적 자동화 세션에 보낼 종목명이 필요.'],
+ ['stock','장마감 브리핑 팟캐스트','idle','c','11/19 20:57','PR #133 병합, 오늘 음성 재생성해 피드 업로드.'],
+ ['stock','미국 증시 아침 브리핑','idle','c','11/10 08:38','11/10 브리핑에 유가 급락 이유 반영.'],
+ ['stock','출근길 브리핑 해설 작성','idle','c','11/02 13:05','화~토 06:35 해설 작성. 10/30·31 4건 미실행 기록.'],
+ ['stock','주식투자 사이트 개발','idle','c','11/18 09:08','지킴이 설치 방법을 PR 358로 문서화, PR 130·131·132·356 반영.'],
+ ['stock','실시간 수급체크 운영','idle','p','11/12 14:09','재부팅·로그아웃 후엔 로그인해야 기록 재개. 절전 모드는 직접 확인 필요.'],
+ ['stock','기업 리포트 요약','idle','c','11/05 15:33','GitHub 예약으로 평일 홈페이지 자동 업데이트(보통 08:40 전후).'],
+ ['stock','글로벌 주식 시장 밸류에이션 비교','idle','c','10/20 23:09','중국·홍콩 시총 상위 20 리포트에 원화 환산 열 추가.'],
+ ['stock','실시간 수급체크 운영 (이전)','off','p','11/12 12:16','보관됨.'],
+ ['stock','실적 자동 점검 전용 (이전)','off','c','11/03 10:06','보관됨. 원격 브랜치 claude/push-test-1103 삭제가 403으로 실패해 남아 있음.'],
+ ['stock','오전 데일리','off','p','10/06 12:36','보관됨. 07시 발송 루틴을 06:57로 조정.'],
+ ['stock','외국인 자금 유출 출처 분석','off','c','10/14 15:04','보관됨.'],
+ ['stock','IonQ 수익성·경쟁력','off','c','10/21 08:23','보관됨. 흑자 목표 2030년 전후.'],
+ ['life','제주 행사 알리미','review','c','11/18 10:31','검토할 결과가 올라와 있음. 고정(핀)된 세션.'],
+ ['life','제주도 행사 정보 수집 사이트','idle','p','10/28 11:59','네이버 검색을 출처로 추가. 반영은 다음 날 08:00 정기 실행.'],
+ ['life','제주도 아기 동반 식당/숙소','idle','p','10/28 14:04','저지리 현대미술관 추가, 제주 아이랑 페이지 재게시.'],
+ ['life','사이트 계정 이전','wait','c','11/19 12:12','.vercel·.env.local 삭제를 마쳤는지, jeju-events 오늘 새 배포가 있는지 알려야 함.'],
+ ['life','라이프 플랜','idle','p','10/19 15:37','보유 주택 최대 3채 입력 추가.'],
+ ['life','영어강좌 모집 신청','off','c','10/27 07:49','보관됨. 대신 신청은 불가, 체크리스트 제공.'],
+ ['life','쿠팡 결제 정산 자동화','off','c','10/01 11:40','보관됨. Tampermonkey 스크립트로 정산.'],
+ ['kids','영어 요일 자석 디자인','idle','p','11/20 11:31','자석 이미지 3장을 메일로 재발송. 수신 미확인.'],
+ ['kids','한글 도안 완성','idle','p','11/19 17:50','정답을 다 맞히면 3초 뒤 다음 글자로 자동 이동.'],
+ ['kids','게임 이미지 생성 커넥터','idle','c','11/19 22:51','음성 채점이 "음~" 시작과 아이 발음을 허용. 실제 아이 목소리 테스트는 아직.'],
+ ['tool','안테나팟 자동 새로고침 루틴','idle','c','11/20 08:48','전용 APK 앱이면 재생 가능, 음성 호출 봇은 어려움.'],
+ ['tool','복사해서 넣어줘','idle','c','11/18 15:41','캐릭터용 MCP는 없고 범용 이미지 MCP를 추천.'],
+ ['tool','Session cshk_… (이름 없음)','wait','c','11/13 15:53','gbrain을 어디에 설치했는지, 막힌 단계의 오류 메시지가 필요.'],
+ ['tool','Gbrain','off','p','11/13 15:58','보관됨.']
+];
+var ROOMS=[
+ ['stock','증시·투자 팀룸','리포트, 브리핑, 실적 알람'],
+ ['life','제주·생활 사무실','행사, 숙소, 계정, 계획'],
+ ['kids','아이·교육 스튜디오','영어·한글 학습 자료'],
+ ['tool','실험·도구 창고','앱, 커넥터, 기타']
+];
+var NEEDS_FIRST={};
+var filter=null;
+function el(t,c,x){var e=document.createElement(t);if(c)e.className=c;if(x!=null)e.textContent=x;return e}
+
+function chips(){
+  var box=document.getElementById('chips');box.textContent='';
+  Object.keys(ST).forEach(function(k){
+    var n=D.filter(function(d){return d[2]===k}).length;
+    var b=el('button','chip');b.type='button';b.id='chip-'+k;
+    b.setAttribute('aria-pressed',filter===k?'true':'false');
+    var dot=el('span','dot');dot.style.setProperty('--c',ST[k].c);
+    b.appendChild(dot);b.appendChild(el('span',null,ST[k].t));b.appendChild(el('b',null,n));
+    b.onclick=function(){filter=(filter===k?null:k);chips();rooms()};
+    box.appendChild(b);
+  });
+}
+function needs(){
+  var ul=document.getElementById('needs');ul.textContent='';
+  D.filter(function(d){return d[2]==='wait'}).forEach(function(d){
+    var li=el('li');li.appendChild(el('strong',null,d[1]));li.appendChild(el('span',null,d[5]));ul.appendChild(li);
+  });
+}
+function rooms(){
+  var box=document.getElementById('rooms');box.textContent='';
+  ROOMS.forEach(function(r){
+    var items=D.filter(function(d){return d[0]===r[0]&&(!filter||d[2]===filter)});
+    if(!items.length)return;
+    var room=el('section','room');
+    var h=el('header');h.appendChild(el('h2',null,r[1]));h.appendChild(el('span',null,r[2]+' · 책상 '+items.length+'개'));
+    room.appendChild(h);
+    var g=el('div','desks');
+    items.forEach(function(d,i){
+      var s=ST[d[2]];
+      var b=el('button','desk'+(d[2]==='run'?' live':'')+(d[2]==='off'?' dim':''));
+      b.type='button';b.id='desk-'+r[0]+'-'+i;b.style.setProperty('--c',s.c);b.setAttribute('aria-expanded','false');
+      var top=el('div','top');top.appendChild(el('span','avatar'));
+      var tx=el('div');tx.appendChild(el('div','name',d[1]));tx.appendChild(el('div','state',s.t));top.appendChild(tx);
+      var meta=el('div','meta');meta.appendChild(el('span','tag',d[3]==='p'?'내 PC':'클라우드'));meta.appendChild(el('span',null,d[4]));
+      b.appendChild(top);b.appendChild(meta);b.appendChild(el('p','detail',d[5]));
+      b.onclick=function(){b.setAttribute('aria-expanded',b.getAttribute('aria-expanded')==='true'?'false':'true')};
+      g.appendChild(b);
+    });
+    room.appendChild(g);box.appendChild(room);
+  });
+}
+var SCHED=[
+ ['매시간 52분','실적 속보 매시간 점검','월~토, 한국시간. 할 일이 없으면 "·"만 남기고 종료. 해외주식 실적감시 책상에서 실행.','다음 11/20 13:52 · 직전 12:52 성공'],
+ ['16:25 뉴욕','실적 속보 장마감 직후 점검','미국 장 마감 25분 뒤 한 번. 빅테크·반도체 실적 카드 작성.','다음 11/21 06:25 KST · 직전 11/20 06:25 성공'],
+ ['06:35 서울','출근길 브리핑 해설 작성','화~토. 지난밤 미국 증시 해설 한 단락을 main에 반영.','다음 11/21 06:35 · 직전 11/20 06:35 성공']
+];
+var sc=document.getElementById('sched');
+SCHED.forEach(function(s){
+  var r=el('div','row');r.appendChild(el('div','when',s[0]));
+  var m=el('div');m.appendChild(el('div',null,s[1]));m.appendChild(el('small',null,s[2]));r.appendChild(m);
+  r.appendChild(el('div','next',s[3]));sc.appendChild(r);
+});
+chips();needs();rooms();
+</script>
